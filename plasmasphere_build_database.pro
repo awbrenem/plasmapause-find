@@ -9,25 +9,7 @@
 ;Saves to a file called plasmasphere_rbspX_database.txt
 
 
-
-;; date = '2013-01-15'  ;07-08 UT  < 100 Hz with high E/B
-;; probe = 'a'
-;; ;--------------------------------------------------
-;; date = '2012-09-30'  ;Binbin Ni and Wen Le event
-;; probe = 'a'
-;; ;--------------------------------------------------
-;;date = '2014-01-03' ;BARREL event
-;;probe = 'a'
-;; ;--------------------------------------------------
-;; date = '2012-10-01' 
-;; probe = 'a'
-;; ;-------------------------------------------------
-;; date = '2013-10-02'    ;~05:00 MLT
-;; probe = 'a'
-;; ;-------------------------------------------------
-
-
-pro plasmasphere_build_database
+pro plasmasphere_build_database,times,density,mlt,lshell
 
   ;; args = command_line_args()
   ;; print, args
@@ -39,11 +21,6 @@ pro plasmasphere_build_database
   probe = 'a'
 
 
-
-  ;;in order to avoid false crossings or plumes (if you like) you can
-  ;;set this parameter which represents the minimium time separation
-  ;;b/t inbound and outbound crossings.
-;  minsep = 60.*60.              ;seconds
 
   timespan,date
   rbspx = 'rbsp'+probe
@@ -58,17 +35,17 @@ pro plasmasphere_build_database
   copy_data,rbspx+'_efw_mlt_lshell_mlat_y',rbspx+'_efw_lshell'
   copy_data,rbspx+'_efw_mlt_lshell_mlat_z',rbspx+'_efw_mlat'
 
-  split_vec,rbspx+'_efw_flags_all'
-  copy_data,rbspx+'_efw_flags_all_0',rbspx+'_efw_flag_global'
-  copy_data,rbspx+'_efw_flags_all_1',rbspx+'_efw_flag_eclipse'
-  copy_data,rbspx+'_efw_flags_all_15',rbspx+'_efw_flag_charging'
+  ;; split_vec,rbspx+'_efw_flags_all'
+  ;; copy_data,rbspx+'_efw_flags_all_0',rbspx+'_efw_flag_global'
+  ;; copy_data,rbspx+'_efw_flags_all_1',rbspx+'_efw_flag_eclipse'
+  ;; copy_data,rbspx+'_efw_flags_all_15',rbspx+'_efw_flag_charging'
 
   ylim,rbspx+'_efw_density',1,10000,1
 
 
   get_data,rbspx+'_efw_mlt',ttmp,mlt
   get_data,rbspx+'_efw_lshell',ttmp,lshell
-  get_data,rbspx+'_efw_mlat',ttmp,mlat
+;  get_data,rbspx+'_efw_mlat',ttmp,mlat
   get_data,rbspx+'_efw_pos_gse',ttmp,gse
   radius = sqrt(gse[*,0]^2 + gse[*,1]^2 + gse[*,2]^2)
 
@@ -183,6 +160,68 @@ pro plasmasphere_build_database
 
 
 stop
+
+
+  lshellstart = lshell[wh_psstart]
+  lshellend = lshell[wh_psend]
+  mltstart = mlt[wh_psstart]
+  mltend = mlt[wh_psend]
+  mlatstart = mlat[wh_psstart]
+  mlatend = mlat[wh_psend]
+  radiusstart = radius[wh_psstart]/6370.
+  radiusend = radius[wh_psend]/6370.
+
+
+
+  ;;check to make sure there are any PP crossings before trying to
+  ;;save to file
+  goo = where(psstart ne 0.)
+  if goo[0] ne -1 then begin
+
+     psstart = psstart[goo]
+     psend = psend[goo]
+     lshellstart = lshellstart[goo]
+     lshellend = lshellend[goo]
+     mltstart = mltstart[goo]
+     mltend = mltend[goo]
+     mlatstart = mlatstart[goo]
+     mlatend = mlatend[goo]
+     radiusstart = radiusstart[goo]
+     radiusend = radiusend[goo]
+
+     psdiff = psend - psstart
+
+
+
+     path = '~/Desktop/code/Aaron/RBSP/survey_programs_hiss/'
+     fn = 'plasmasphere_'+rbspx+'_database.txt'
+
+
+     if not file_test(path+fn) then header = 1 else header = 0
+
+     openw,lun,path+fn,/get_lun,/append
+     
+     if header then printf,lun,'PS enter              PS exit      Timeinside(s) Lenter Lexit MLTenter MLTexit mlatenter mlatexit Renter(RE) Rexit(RE)'
+     for i=0L,n_elements(psstart)-1 do printf,lun,$
+                                              time_string(psstart[i]),time_string(psend[i]),$
+                                              psdiff[i],$
+                                              lshellstart[i],lshellend[i],$
+                                              mltstart[i],mltend[i],$
+                                              mlatstart[i],mlatend[i],$
+                                              radiusstart[i],radiusend[i],$
+                                              format='(A19,2x,A19,2x,f6.0,2x,f6.3,2x,f6.3,2x,f6.3,2x,f6.3,2x,f7.3,2x,f7.3,2x,f6.3,2x,f6.3)'
+     close,lun
+     free_lun,lun
+
+
+endif
+  
+end
+
+
+
+
+
 ;; if type eq 'vsvy' then begin
 
 
@@ -289,92 +328,4 @@ stop
 ;;   for i=0,n_elements(psstartS)-1 do print,psend[i] - psstart[i]
 
 ;; endif
-
-
 ;--------------------------------------------------
-
-
-  lshellstart = lshell[wh_psstart]
-  lshellend = lshell[wh_psend]
-  mltstart = mlt[wh_psstart]
-  mltend = mlt[wh_psend]
-  mlatstart = mlat[wh_psstart]
-  mlatend = mlat[wh_psend]
-  radiusstart = radius[wh_psstart]/6370.
-  radiusend = radius[wh_psend]/6370.
-
-
-;; ;do we start and/or end inside of PS? If the boundary is within five
-;; ;minutes of the start or end time of the day, then I'll say yes. 
-;;   startinps = 0
-;;   endinps = 0
-;;   if psstart[0] le time_double(date + '/00:05:00') then startinps = 1
-;;   if psend[n_elements(psend)-1] ge time_double(date+'/23:55:00') then endinps = 1
-
-;;   print,'start in ps = ',startinps
-;;   print,'end in ps = ',endinps
-
-;;   if startinps and (psend[0] - psstart[0]) lt 0 then $
-;;      psstart = [times[0],psstart]
-;;   if endinps then psend = [psend,time_double(date+'/23:59:59')]
-;;   if not startinps and endinps then psstart = [psend[0],psstart]
-
-
-
-  ;; store_data,'plasmasphere_final',data={x:times,y:ps}
-  ;; ylim,'plasmasphere_final',0,1.5
-  ;; tplot,[rbspx+'_efw_Vavg','plasmasphere_final']
-  ;; timebar,psstart
-  ;; timebar,psend,color=250
-
-
-
-  ;;check to make sure there are any PP crossings before trying to
-  ;;save to file
-  goo = where(psstart ne 0.)
-  if goo[0] ne -1 then begin
-
-     psstart = psstart[goo]
-     psend = psend[goo]
-     lshellstart = lshellstart[goo]
-     lshellend = lshellend[goo]
-     mltstart = mltstart[goo]
-     mltend = mltend[goo]
-     mlatstart = mlatstart[goo]
-     mlatend = mlatend[goo]
-     radiusstart = radiusstart[goo]
-     radiusend = radiusend[goo]
-
-     psdiff = psend - psstart
-
-
-
-     path = '~/Desktop/code/Aaron/RBSP/survey_programs_hiss/'
-     fn = 'plasmasphere_'+rbspx+'_database.txt'
-
-
-     if not file_test(path+fn) then header = 1 else header = 0
-
-     openw,lun,path+fn,/get_lun,/append
-     
-     if header then printf,lun,'PS enter              PS exit      Timeinside(s) Lenter Lexit MLTenter MLTexit mlatenter mlatexit Renter(RE) Rexit(RE)'
-     for i=0L,n_elements(psstart)-1 do printf,lun,$
-                                              time_string(psstart[i]),time_string(psend[i]),$
-                                              psdiff[i],$
-                                              lshellstart[i],lshellend[i],$
-                                              mltstart[i],mltend[i],$
-                                              mlatstart[i],mlatend[i],$
-                                              radiusstart[i],radiusend[i],$
-                                              format='(A19,2x,A19,2x,f6.0,2x,f6.3,2x,f6.3,2x,f6.3,2x,f6.3,2x,f7.3,2x,f7.3,2x,f6.3,2x,f6.3)'
-     close,lun
-     free_lun,lun
-
-
-endif
-  
-end
-
-
-
-
-
