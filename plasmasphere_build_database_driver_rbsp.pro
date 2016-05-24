@@ -1,24 +1,28 @@
-;;Calls the general routine rbsp_plasmasphere_build_database.pro with
-;;input values for RBSP (Van Allen Probes)
+;Calls the general routine rbsp_plasmasphere_build_database.pro with
+;input values for RBSP (Van Allen Probes)
 
-;;saves an array at end with values
+;saves an array at end with values
 
-;;Called by plasmasphere_build_database_rbsp.py
+;Called by plasmasphere_build_database_rbsp.py
 
 
-pro plasmasphere_build_database_driver_rbsp,date,probe
+pro plasmasphere_build_database_driver_rbsp
 
-  ;; args = command_line_args()
-  ;; print, args
+  args = command_line_args()
+  print, args
 
-  ;; date = args[0]
-  ;; probe = args[1]
+  date = args[0]
+  probe = args[1]
 
   ;; date = '2013-02-14'
   ;; probe = 'a'
 
 
 
+	print,'**************'
+	print,date
+	print,probe
+	print,'**************'
 
   timespan,date
   rbspx = 'rbsp'+probe
@@ -35,7 +39,7 @@ pro plasmasphere_build_database_driver_rbsp,date,probe
 
   ylim,rbspx+'_efw_density',1,10000,1
   get_data,rbspx+'_efw_density',times,density
-  
+
 
   get_data,rbspx+'_efw_mlt',ttmp,mlt
   get_data,rbspx+'_efw_lshell',ttmp,lshell
@@ -43,15 +47,19 @@ pro plasmasphere_build_database_driver_rbsp,date,probe
   get_data,rbspx+'_efw_pos_gse',ttmp,gse
   radius = sqrt(gse[*,0]^2 + gse[*,1]^2 + gse[*,2]^2)
 
-  tinterpol_mxn,'rbsp'+probe+'_ME_orbitnumber',times
-  get_data,'rbsp'+probe+'_ME_orbitnumber_interp',ttmp,orbit
+;  tinterpol_mxn,'rbsp'+probe+'_ME_orbitnumber',times
+  get_data,'rbsp'+probe+'_ME_orbitnumber',ttmp,orbit
+
+
+  perigee_loc = where(orbit - shift(orbit,1) eq 1)
+  perigeeT = ttmp[perigee_loc]
 
 
   path = '~/Desktop/code/Aaron/RBSP/survey_programs_hiss/'
   fn = 'plasmasphere_'+rbspx+'_database.txt'
 
 
-  vals = plasmasphere_build_database(times,density,orbit)
+  vals = plasmasphere_crossing_id(times,density,perigeeT)
 
 
 
@@ -59,7 +67,7 @@ pro plasmasphere_build_database_driver_rbsp,date,probe
 
 
 
- 
+
   lshellstart = lshell[vals.where_start]
   lshellend = lshell[vals.where_end]
   mltstart = mlt[vals.where_start]
@@ -91,14 +99,13 @@ pro plasmasphere_build_database_driver_rbsp,date,probe
 
   endif
 
-stop
 
 
 
      if not file_test(path+fn) then header = 1 else header = 0
 
      openw,lun,path+fn,/get_lun,/append
-     
+
      if header then printf,lun,'PS enter              PS exit      Timeinside(s) Lenter Lexit MLTenter MLTexit mlatenter mlatexit Renter(RE) Rexit(RE)'
      for i=0L,n_elements(psstart)-1 do printf,lun,$
                                               time_string(psstart[i]),$
@@ -115,10 +122,4 @@ stop
      free_lun,lun
 
 
-
-
-stop
-
 end
-
-

@@ -1,2 +1,6 @@
 #BBEDIT project file
 *.bbprojectd
+*.ps
+*.eps
+*.png
+*.tiff

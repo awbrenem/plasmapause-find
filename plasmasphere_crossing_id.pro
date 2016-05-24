@@ -6,7 +6,7 @@
 ; INPUT: times -> array of unix times
 ;        density -> array of density values (cm-3) (set missing values
 ;        as NaN)
-;        orbit -> sc orbit number (increments at perigee)
+;        perigeeT -> array of times when sc reaches perigee
 ; OUTPUT: structure with the following:
 ;       psstart --> time of PS entry
 ;       psend   --> time of PS exit
@@ -14,29 +14,66 @@
 ;       where_end   --> array location of PS exit
 ; KEYWORDS: dens_lim --> density value for PP crossing. Defaults to 100/cc
 ; HISTORY: Written by Aaron W Breneman, May 2016
-; VERSION: 
+; VERSION:
 ;   $LastChangedBy: $
 ;   $LastChangedDate: $
 ;   $LastChangedRevision: $
 ;   $URL: $
 ;-
 
-function plasmasphere_crossing_id,times,density,orbit,$
+function plasmasphere_crossing_id,times,density,perigeeT,$
                                   dens_lim=dens_lim
-  
 
 
-  date = strmid(time_string(times[0]),0,10)
+
+test = 0
+if test ne 1 then date = strmid(time_string(times[0]),0,10)
+
+
+if test then begin
+	date = '2013-02-10'
+	timespan,date
+	probe='a'
+	rbspx='rbspa'
+
+  rbsp_read_ect_mag_ephem,probe
+  rbsp_load_efw_waveform_l3,probe=probe
+
+
+  ylim,rbspx+'_efw_density',1,10000,1
+  get_data,rbspx+'_efw_density',times,density
+
+;density[*] = 1.
+;goo = where((times ge time_double('2013-01-01/02:30:00')) and (times le time_double('2013-01-01/16:30:00')))
+;density[goo] = 200.
+
+  get_data,rbspx+'_efw_mlt',ttmp,mlt
+  get_data,rbspx+'_efw_lshell',ttmp,lshell
+  get_data,rbspx+'_efw_mlat',ttmp,mlat
+  get_data,rbspx+'_efw_pos_gse',ttmp,gse
+  radius = sqrt(gse[*,0]^2 + gse[*,1]^2 + gse[*,2]^2)
+
+
+;  tinterpol_mxn,'rbsp'+probe+'_ME_orbitnumber',times
+  get_data,'rbsp'+probe+'_ME_orbitnumber',ttmp,orbit
+
+
+  perigee_loc = where(orbit - shift(orbit,1) eq 1)
+  perigeeT = ttmp[perigee_loc]
+
+;perigeeT = '2013-01-01/'+['01:55','04:00','06:00','08:00','10:00','12:00','14:00','16:10','18:00','20:00','22:00','24:00']
+;perigeeT = time_double(perigeeT)
+
+print,time_string(perigeet)
+
+
+endif
+
+
+if test then stop
 
   if ~keyword_set(dens_lim) then dens_lim = 100.
 
-
-
-;; Find how far from perigee (time, in either direction) you have to go to reach
-;;100/cc
-
-  perigeeT = where(orbit - shift(orbit,1) eq 1)
-  perigeeT = times[perigeeT]    ;exact perigee times
 
 
 ;arrays with crossing times
@@ -49,9 +86,11 @@ function plasmasphere_crossing_id,times,density,orbit,$
   wh_psend = fltarr(n_elements(perigeeT))
 
 
-
+	q=0
   ;; For each perigee crossing in a day...
-  for q=0,n_elements(perigeeT)-1 do begin
+  while q le n_elements(perigeeT)-1 do begin
+
+     skip_fac = 0.
 
      goobefore = where(times le perigeeT[q]) ;Times before the perigee
      gooafter = where(times gt perigeeT[q])  ;Times after the perigee
@@ -59,9 +98,10 @@ function plasmasphere_crossing_id,times,density,orbit,$
      binbefore = density[goobefore] lt 100
      tmp = where(binbefore eq 1)
 
-     if tmp[0] ne -1 then begin
-                                ;print,density[goobefore[tmp]]
-
+	 ;-----
+	 ;Case 1(entry): We're in PS at time of perigee
+     if tmp[0] ne -1 and binbefore[n_elements(binbefore)-1] ne 1 then begin
+        ;print,density[goobefore[tmp]]
 
                                 ;index of nearest 100/cc element before perigee
         gooinbound100 = tmp[n_elements(tmp)-1]
@@ -71,74 +111,158 @@ function plasmasphere_crossing_id,times,density,orbit,$
         psstart[q] = times[goobefore[gooinbound100]]
                                 ;array element of that element in dens array
         wh_psstart[q] = goobefore[gooinbound100]
-     endif else begin
 
+        if test then stop
+     endif
+
+	 ;-----
+	 ;Case 2(entry): We're outside of PS at time of perigee
+     if tmp[0] ne -1 and binbefore[n_elements(binbefore)-1] eq 1 then begin
+        psstart[q] = 0.
+                                ;array element of that element in dens array
+        wh_psstart[q] = -1
+
+		if test then stop
+     endif
+
+
+
+	 ;-----
+     ;Case 3(entry): day starts in PS
+     if tmp[0] eq -1 then begin
+		;manually set entry time to first time of day
         densinbound100[q] = density[0]
         psstart[q] = time_double(date + '/00:00:00')
         wh_psstart[q] = 0.
 
-     endelse
+		if test then stop
+     endif
 
      print,'Entry into PP at ' + time_string(psstart[q]) + $
            ' for perigee at  ' + time_string(perigeeT[q])
 
+
      binafter = density[gooafter] lt 100
      tmp = where(binafter eq 1)
 
-     if tmp[0] ne -1 then begin
+	 ;Now find the PS exit time
+	 ;-----
+	 ;Case 1(exit): We're in PS at time of perigee
+     if tmp[0] ne -1 and psstart[q] ne 0. then begin
 
-;print,density[gooafter[tmp]]
+		;print,density[gooafter[tmp]]
         goooutbound100 = tmp[0]
         densoutbound100[q] = density[gooafter[goooutbound100]]
         psend[q] = times[gooafter[goooutbound100]]
         wh_psend[q] = gooafter[goooutbound100]
 
-     endif else begin
 
+		;Check to see that exit from PS is not after the next perigee time.
+		;Corresponds to situation where sc never leaves PS during an orbit
+
+		;get remaining perigee times
+		if n_elements(perigeeT)-1 ge q+1 then begin
+			perigeeT_goo = perigeeT[q+1:n_elements(perigeeT)-1]
+			skip_fac = psend[q] gt perigeeT_goo
+		endif else skip_fac = 0.
+
+		if test then stop
+     endif
+
+
+	 ;-----
+     ;Case 2(exit): We're outside of PS at time of perigee
+     if psstart[q] eq 0. then begin
+     	psend[q] = 0.
+		wh_psend[q] = -1.
+
+		if test then stop
+     endif
+
+
+	 ;-----
+     ;Case 3(exit): still in PS at day end boundary
+     if tmp[0] eq -1 then begin
+		;manually set exit time to last time of day
         densoutbound100[q] = density[n_elements(density)-1]
         psend[q] = time_double(date + '/23:59:59')
         wh_psend[q] = n_elements(times)-1
 
-     endelse
+		if test then stop
+     endif
 
-     print,'Exit of PP at    ' + time_string(psend[q]) + $
+
+	     print,'Exit of PP at    ' + time_string(psend[q]) + $
            ' for perigee at  ' + time_string(perigeeT[q])
 
-  endfor
+		if test then stop
+	print,skip_fac
+	q = q + 1 + total(skip_fac)
+  endwhile
 
+print,time_string(psstart)
+print,time_string(psend)
+
+
+;get rid of non-crossings
+goo = where(psstart ne 0.)
+if goo[0] ne -1 then psstart = psstart[goo]
+if goo[0] ne -1 then psend = psend[goo]
+if goo[0] ne -1 then wh_psstart = wh_psstart[goo]
+if goo[0] ne -1 then wh_psend = wh_psend[goo]
+
+;stop
 
 ;;------------------------------------------------------------------------------
-  ;;Test day end boundary to see if we've reentered into
-  ;;PS. Sometimes we can find ourselves back in PS and not know it
+  ;;Test first and last times in day to see if we start or end in the plasmasphere.
+  ;;This is different than case(enter) and case3(exit) from above.
+
+;;Sometimes we can find ourselves back in PS and not know it
   ;;from above algorithm which relies on orbit boundaries
   ;;(perigee). If the perigee occurs nearly enough on the next day
-  ;;we may be in PS and not know it.  
+  ;;we may be in PS and not know it.
   ;;If so, then backtrack to see how long we've been in PS.
 
 
-  ;;day end boundary
-  densv = density[n_elements(density)-1]
+
+    ;find first non NaN value of density
+   boop = where(finite(density) ne 0)
+   densv = density[boop[0]]
+
+   if densv ge 100. then begin
+      goo = where(density le 100.,cnt)
+      firstpp = goo[0]
+      if times[firstpp] lt psstart[0] then begin
+         psstart = [time_double(date+'/00:00:00'), psstart]
+         psend = [time_double(times[firstpp]), psend]
+         wh_psstart = [0, wh_psstart]
+         wh_psend =   [firstpp, wh_psend]
+
+		if test then stop
+      endif
+   endif
+
+   ;find last non NaN value of density
+  boop = where(finite(density) ne 0)
+  densv = density[boop[n_elements(boop)-1]]
   if densv ge 100. then begin
      goo = where(density le 100.,cnt)
      lastpp = goo[cnt-1]
      if times[lastpp] gt psend[n_elements(psend)-1] then begin
         psstart = [psstart, time_double(times[lastpp])]
         psend = [psend, time_double(date+'/23:59:59')]
-     endif  
+        wh_psstart = [wh_psstart, lastpp]
+;        wh_psend =   [wh_psend,   n_elements(times)-1]
+        wh_psend =   [wh_psend,   boop[n_elements(boop)-1]]
+
+;boop[n_elements(boop)-1]
+
+		if test then stop
+     endif
   endif
 
-  ;; ;;day beginning boundary
-  ;; densv = density[0]
-  ;; if densv ge 100. then begin
-  ;;    goo = where(density le 100.,cnt)
-  ;;    firstpp = goo[0]
-  ;;    if times[firstpp] lt psstart[0] then begin
-  ;;       psstart = [time_double(date+'/00:00:00'), psstart]
-  ;;       psend = [time_double(times[firstpp]), psend]
-  ;;    endif  
-  ;; endif
 
-
+;stop
 
   vals = {psstart:psstart,$
           psend:psend,$
@@ -148,117 +272,5 @@ function plasmasphere_crossing_id,times,density,orbit,$
   return,vals
 
 
-  
+
 end
-
-
-
-
-
-;; if type eq 'vsvy' then begin
-
-
-;; ps = bytarr(n_elements(times))
-;; if goo[0] ne -1 then ps[goo] = 1
-;; times = times
-
-;; store_data,'plasmasphere',data={x:times,y:ps}
-;; ylim,'plasmasphere',0,1.5
-;; ;VERSION 2...USING (V1+V2)/2
-;;   get_data,rbspx+'_efw_Vavg',data=vavg
-;;   goo = where((vavg.y ge -2.) and (vavg.y lt 0.))
-;;   ps = bytarr(n_elements(vavg.x))
-;;   if goo[0] ne -1 then ps[goo] = 1
-;;   ;REMOVE THE GAP THAT USUALLY EXISTS AT PERIGEE B/C THE SC POTENTIAL IS
-;;   ;TOO HIGH
-;;   goo = where(lshell le 2.5)
-;;   if goo[0] ne -1 then ps[goo] = 1
-;;   times = vavg.x
-
-
-;;   store_data,'plasmasphere2',data={x:times,y:ps}
-;;   ylim,'plasmasphere2',0,1.5
-;;   ylim,rbspx+'_efw_Vavg',-10,4,0
-
-
-
-;; ;-1  = heading out of plasmasphere
-;; ;1   = entering plasmsphere
-
-;;   dif_bool = floor(float(ps) - shift(float(ps),1))
-;;   store_data,'dif_bool',data={x:times,y:dif_bool}
-;;   ylim,'dif_bool',-1.5,1.5
-;; ;  tplot,'dif_bool'
-
-
-;;   goo = where(dif_bool eq 1)
-;;   if goo[0] ne -1 then psstart = times[goo] else psstart = time_double(date + '/00:00:00')
-;;   if goo[0] ne -1 then lshellstart = lshell[goo]
-;;   if goo[0] ne -1 then mltstart = mlt[goo]
-;;   if goo[0] ne -1 then mlatstart = mlat[goo]
-;;   if goo[0] ne -1 then radiusstart = radius[goo]/6370.
-
-;;   goo = 0.
-;;   goo = where(dif_bool eq -1)
-;;   if goo[0] ne -1 then psend = times[goo-1] else psend = time_double(date + '/00:00:00')
-;;   if goo[0] ne -1 then lshellend = lshell[goo]
-;;   if goo[0] ne -1 then mltend = mlt[goo]
-;;   if goo[0] ne -1 then mlatend = mlat[goo]
-;;   if goo[0] ne -1 then radiusend = radius[goo]/6370.
-
-
-
-
-;; ;do we start and/or end inside of PS?
-;;   startinps = ps[0] eq 1        ; (psend[0] - psstart[0]) lt 0
-;;   endinps = ps[n_elements(ps)-1] eq 1
-
-;;   print,'start in ps = ',startinps
-;;   print,'end in ps = ',endinps
-
-;;   if startinps and (psend[0] - psstart[0]) lt 0 then psstart = [times[0],psstart]
-;;   if endinps then psend = [psend,time_double(date+'/23:59:59')]
-;;   if not startinps and endinps then psstart = [psend[0],psstart]
-
-
-;; ;; help,psstart,psend
-;; ;; for i=0,100 do print,time_string(psstart[i]) + ' to ' + time_string(psend[i])
-
-
-
-
-;; ;Remove elements when the difference b/t ps start and ps end is too
-;; ;small
-
-;; stop
-;;   psdiff = psend - psstart
-;;   goo = 0.
-;;   goo = where(psdiff ge minsep)
-
-
-;; stop
-
-;;   if goo[0] ne -1 then psstart = psstart[goo]
-;;   if goo[0] ne -1 then psend = psend[goo]
-;;   if goo[0] ne -1 then lshellstart = lshellstart[goo]
-;;   if goo[0] ne -1 then lshellend = lshellend[goo]
-;;   if goo[0] ne -1 then mltstart = mltstart[goo]
-;;   if goo[0] ne -1 then mltend = mltend[goo]
-;;   if goo[0] ne -1 then mlatstart = mlatstart[goo]
-;;   if goo[0] ne -1 then mlatend = mlatend[goo]
-;;   if goo[0] ne -1 then radiusstart = radiusstart[goo]
-;;   if goo[0] ne -1 then radiusend = radiusend[goo]
-
-
-;;   ;; tplot,'plasmasphere2'
-;;   ;; timebar,psstart,color=250
-;;   ;; timebar,psend,color=150
-
-;;   psstartS = time_string(psstart)
-;;   psendS = time_string(psend)
-
-;;   for i=0,n_elements(psstartS)-1 do print,psstartS[i] + ' to ' + psendS[i]
-;;   for i=0,n_elements(psstartS)-1 do print,psend[i] - psstart[i]
-
-;; endif
-;--------------------------------------------------
