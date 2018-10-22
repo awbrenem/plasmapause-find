@@ -9,8 +9,8 @@ import time
 
 p='a'   #select probe 'a' or 'b'
 
-d0 = datetime.datetime(2014, 1, 1, 0, 0, 0)
-d1 = datetime.datetime(2016, 1, 1, 0, 0, 0)
+d0 = datetime.datetime(2013, 3, 15, 0, 0, 0)
+d1 = datetime.datetime(2013, 3, 19, 0, 0, 0)
 
 ndays = str(d1 - d0)
 
