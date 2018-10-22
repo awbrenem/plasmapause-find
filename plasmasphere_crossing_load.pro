@@ -170,6 +170,8 @@ function plasmasphere_crossing_load,fn,$
   msphere_outboundT:msphereo,$
   lshelli:lshelliF,$
   lshello:lshelloF,$
+  lshelli_ms:lshelli_ms,$
+  lshello_ms:lshello_ms,$
   mlti:mltiF,$
   mlto:mltoF,$
   mlati:mlatiF,$
