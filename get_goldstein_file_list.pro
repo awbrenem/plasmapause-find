@@ -1,4 +1,13 @@
 ;Returns list of available Goldstein files 
+;Intended to be passed to a procedure like load_goldstein_plasmasphere_file.pro. 
+;The reason this is separated is b/c it takes a few sec to grab this list. You don't 
+;want to grab it n times, where n is the number of array time elements. 
+
+;        Required plasmapause files can be found at
+;        http://enarc.space.swri.edu/PTP/
+;        An example of one of these is:
+;        /Users/aaronbreneman/Desktop/code/Aaron/datafiles/goldstein_pp_files/20140040000.ppa
+
 
 function get_goldstein_file_list,path=path
 
