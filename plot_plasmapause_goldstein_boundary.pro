@@ -48,35 +48,11 @@ if ~keyword_set(name) then name = 'psphere_plot.ps'
 
 
 
-
-
-;Format the input time string for input into get_goldstein_file_list.pro
-time = time_string(time_double(time))
-year0 = strmid(time,0,4) + '-01-01'
-doy = 1 + floor(time_double(time)/86400 - time_double(year0)/86400)
-doyS = strarr(n_elements(doy))
-if doy lt 10 then doyS = '00'+strtrim(doy,2)
-if doy ge 10 and doy lt 100 then doyS = '0'+strtrim(doy,2)
-if doy ge 100 then doyS = strtrim(doy,2)
-datetime = strmid(time,0,4) + doyS + strmid(time,11,2) + strmid(time,14,2)
-
-
-
-
-;Load the appropriate Goldstein PP file and get L,MLT values to plot
+;Load the Goldstein PP file nearest the requested time, and get L,MLT values to plot
 files = get_goldstein_file_list()
-file_to_load = ''
-goo = where(double(datetime) le files)
-file_to_load = string(files[goo[0]],format='(i11)') + '.ppa'
-ppvals = load_goldstein_plasmasphere_file(file_to_load)
+timeplot = time_string(time)
+ppvals = load_goldstein_plasmasphere_file(timeplot,files=files)
 
-
-
-;Convert DOY format back to Unix format for better plot labeling
-tmp = strmid(datetime,0,7)
-frac = string(float(strmid(datetime,7,4))/2400.)
-frac = strmid(strtrim(frac,2),1,4)
-timeplot = date_conv(double(tmp+frac),'F') 
 
 
 
@@ -85,7 +61,6 @@ timeplot = date_conv(double(tmp+frac),'F')
 if ~KEYWORD_SET(oplot) then begin
 
     if keyword_set(ps) then popen,'~/Desktop/'+name
-
 
 
     ;Lshell lines, etc. 
@@ -166,4 +141,5 @@ oplot,[xp[midpt],xp[midpt]],[yp[midpt],yp[midpt]],psym=-2,symsize=1,color=50
 
 
 if keyword_set(ps) then pclose
+
 end
